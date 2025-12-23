@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nir's Media Station 🎵</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        :root {
+            --bg: #121212;
+            --card-bg: #1e1e1e;
+            --primary: #1DB954;
+            --waves-track-bg: #2d2d2d;
+            --text: #ffffff;
+            --success-bg: #1DB954;  /* Spotify green */
+            --failure-bg: #ff4444;  /* Bright red */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f, #222);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px;
+            background: rgba(0,0,0,0.5);
+            min-height: 80px;
+            flex-shrink: 0;
+        }
+
+        .title-section {
+            flex: 1;
+            min-width: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #clock {
+            font-size: 3rem;
+            font-weight: bold;
+            color: yellow;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-left: 20px;
+        }
+
+        .container {
+            flex: 1;
+            max-width: 800px;
+            width: 100%;
+            margin: 0;
+            padding: 20px;
+            padding-right: 0;
+            display: grid;
+            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            align-self: flex-start;
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .panel.waves, .panel.source {
+            background: var(--waves-track-bg);
+        }
+
+        .panel h2 {
+            margin: 0 0 10px;
+            font-size: 1.4rem;
+            text-align: left;
+            color: var(--primary);
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 12px;
+            padding: 16px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            color: white;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.03);
+        }
+
+        button.large {
+            font-size: 1.4rem;
+            padding: 20px;
+        }
+
+        /* Volume gradient reds */
+        button#low { background: #ff4444; }
+        button#medium { background: #ff2222; }
+        button#high { background: #ee0000; }
+        button#superhigh { background: #cc0000; }
+
+        button#mute { background: #4488ff; }
+
+        .panel.waves button.large,
+        .panel.source button.large {
+            background: var(--primary);
+        }
+
+        button:not(#low):not(#medium):not(#high):not(#superhigh):not(#mute):not(.panel.waves button.large):not(.panel.source button.large) {
+            background: #ff4500;
+        }
+
+        button svg {
+            width: 32px;
+            height: 32px;
+            fill: currentColor;
+            flex-shrink: 0;
+        }
+
+        /* Transient feedback overlay on the pressed button */
+        button.feedback-success {
+            background: var(--success-bg) !important;
+            color: white;
+            font-weight: bold;
+            transform: scale(1.08);
+            box-shadow: 0 0 25px rgba(29, 185, 84, 0.8);
+        }
+
+        button.feedback-failure {
+            background: var(--failure-bg) !important;
+            color: white;
+            font-weight: bold;
+            transform: scale(1.08);
+            box-shadow: 0 0 25px rgba(255, 68, 68, 0.8);
+        }
+
+        #info {
+            text-align: left;
+            font-size: 1.1rem;
+            color: var(--primary);
+            padding: 10px 0;
+            grid-column: 1 / -1;
+            min-height: 1.4em;
+            font-weight: bold;
+        }
+
+        @media (max-width: 900px) {
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            #clock { margin-left: 0; margin-top: 10px; }
+            h1 { font-size: 1.8rem; }
+            #clock { font-size: 2.6rem; }
+        }
+
+        @media (max-width: 480px) {
+            header { padding: 16px; }
+            h1 { font-size: 1.6rem; }
+            #clock { font-size: 2.3rem; }
+            .container { padding: 16px; padding-right: 0; }
+            button { font-size: 1.1rem; padding: 14px; }
+            button.large { padding: 18px; }
+            button svg { width: 28px; height: 28px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="title-section">
+            <h1>Nir's Media Station 🎶</h1>
+        </div>
+        <div id="clock">---- </div>
+    </header>
+
+    <div class="container">
+        <div class="panel">
+            <h2>🔊 Volume Control</h2>
+            <button id="mute" class="large">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                Mute
+            </button>
+            <button id="low">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
+                Low
+            </button>
+            <button id="medium">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
+                Medium
+            </button>
+            <button id="high">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                High
+            </button>
+            <button id="superhigh" class="large">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                Max Blast
+            </button>
+        </div>
+
+        <div class="panel waves">
+            <h2>🌊 Volume Waves (Keep Cats Awake 🐱)</h2>
+            <button id="enable-waves" class="large">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 12c0-2.61 1.67-4.83 4-5.65V4.26C3.97 5.26 2 8.39 2 12s1.97 6.74 5 7.74v-2.09c-2.33-.82-4-3.04-4-5.65zM7 12c0-1.47.8-2.74 2-3.44v-4.1C6.23 5.25 5 7.98 5 11s1.23 5.75 4 6.54v-4.1c-1.2-.7-2-1.97-2-3.44zm8.07-7.74l-1.41 1.41C15.88 7.13 17 9.18 17 12c0 2.82-1.12 4.87-3.34 6.33l1.41 1.41C17.76 18.05 19 15.27 19 12c0-3.27-1.24-6.05-3.93-7.74zM12 8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                Enable Waves
+            </button>
+            <button id="no-waves-two">
+                No Waves for 2 Hours ⏳
+            </button>
+            <button id="no-waves">
+                No Waves Today 📅
+            </button>
+        </div>
+
+        <div class="panel source">
+            <h2>🎼 Source & Tracks</h2>
+            <button id="spotify" class="large">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><path d="M248 8C111.1 8 0 119.1 0 256s111.1 248 248 248 248-111.1 248-248S384.9 8 248 8Z" fill="#1DB954"/><path d="M406.6 231.1c-5.2 0-8.3-1.5-12.2-4.7-34.9-28.9-87.7-37.4-133.4-22.8-5.6 1.8-11.6.8-16.1-3.4-4.5-4.2-5.9-10.4-3.6-16 22.6-54 74.6-90.9 134.7-90.9 26.8 0 52.3 6.1 75.2 17.1 5.3 2.5 11.7 1.3 15.9-3.1 4.2-4.4 4.8-10.9 1.4-15.7-28.6-38.3-70.5-59.6-114.6-59.6-68.6 0-129.5 38.4-164.3 99.3-4.4 7.7-2.6 17.5 4.1 22.8 6.7 5.3 16.5 4.5 22.8-1.9 27.9-28.6 68.8-44.7 111.3-44.7 36.4 0 70.5 12.2 97.5 33.4 4.9 3.9 12.1 3.1 16.4-1.6 4.3-4.7 4.3-12 .2-16.7-19.2-30.6-51.1-48.2-86.3-48.2-55.8 0-105.4 31.1-130.7 79.2-3.8 7.2-1.6 16 5.4 20.9 7 4.9 16.1 4.4 22.3-.8 19.6-16.4 45.9-25.6 74-25.6 32.4 0 62.2 11.9 84.7 31.7 4.8 4.2 12.1 3.8 16.5-.6 4.4-4.4 4.5-11.7 .3-16.3-17.7-21.1-42.8-32.9-69.8-32.9-45.2 0-85.2 24.2-107.4 60.6-3.5 5.7-2.1 13.1 3.6 17.8 5.7 4.7 13.6 4.7 19.3 0 17.3-28.3 48.5-46.3 83.9-46.3 28.9 0 55.5 10.2 76.3 27.6 4.7 3.9 11.9 3.3 16.2-1.3 4.3-4.6 4.4-11.9 .3-16.6-16.3-19.7-40-30.5-65.9-30.5z"/></svg>
+                Play Spotify
+            </button>
+            <button id="techno" class="large">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                Techno MP3s
+            </button>
+            <button id="spotify-reboot">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.5 2c-5.621 0-10.211 4.443-10.475 10h-3.025l5 5 5-5h-3c.264-4.411 4.077-8 8.5-8 4.688 0 8.5 3.812 8.5 8.5s-3.812 8.5-8.5 8.5c-3.257 0-6.094-1.833-7.562-4.5h-2.938c1.594 4.348 5.75 7.5 10.5 7.5 5.799 0 10.5-4.701 10.5-10.5s-4.701-10.5-10.5-10.5z"/></svg>
+                Spotify Reboot (Temp + Return)
+            </button>
+            <button id="skip-track-now">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                Skip Track Now
+            </button>
+        </div>
+
+        <span id="info"></span>
+    </div>
+
+    <script>
+        const infoElement = document.getElementById('info');
+        let currentFeedbackButton = null;
+        const FEEDBACK_DURATION = 3000; // 3 seconds, matching your "Success" display time
+
+        // Observe changes in #info to trigger visual feedback on the last clicked button
+        const observer = new MutationObserver(() => {
+            const text = infoElement.textContent.trim().toLowerCase();
+
+            if (text === '' && currentFeedbackButton) {
+                // Status cleared → restore original button appearance
+                restoreButton(currentFeedbackButton);
+                currentFeedbackButton = null;
+            } else if (text.includes('success') || text.includes('ok')) {
+                applyFeedback('success');
+            } else if (text.includes('fail') || text.includes('error')) {
+                applyFeedback('failure');
+            }
+        });
+
+        observer.observe(infoElement, { childList: true, subtree: true, characterData: true });
+
+        // Track the last clicked button
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // If there's ongoing feedback, clear it first
+                if (currentFeedbackButton && currentFeedbackButton !== this) {
+                    restoreButton(currentFeedbackButton);
+                }
+                currentFeedbackButton = this;
+            });
+        });
+
+        function applyFeedback(type) {
+            if (!currentFeedbackButton) return;
+
+            // Remove any previous feedback classes
+            currentFeedbackButton.classList.remove('feedback-success', 'feedback-failure');
+
+            // Apply new feedback
+            if (type === 'success') {
+                currentFeedbackButton.classList.add('feedback-success');
+                currentFeedbackButton.textContent = 'Success ✓';
+            } else if (type === 'failure') {
+                currentFeedbackButton.classList.add('feedback-failure');
+                currentFeedbackButton.textContent = 'Failure ✗';
+            }
+
+            // Hide icon temporarily
+            const svg = currentFeedbackButton.querySelector('svg');
+            if (svg) svg.style.display = 'none';
+
+            // Auto-restore after duration (in case status doesn't clear exactly at 3s)
+            setTimeout(() => {
+                if (currentFeedbackButton && 
+                    (currentFeedbackButton.classList.contains('feedback-success') || 
+                     currentFeedbackButton.classList.contains('feedback-failure'))) {
+                    restoreButton(currentFeedbackButton);
+                }
+            }, FEEDBACK_DURATION + 200);
+        }
+
+        function restoreButton(btn) {
+            btn.classList.remove('feedback-success', 'feedback-failure');
+            btn.innerHTML = btn.dataset.originalContent || btn.innerHTML; // restore original HTML
+            const svg = btn.querySelector('svg');
+            if (svg) svg.style.display = '';
+        }
+
+        // Save original button content on load
+        document.querySelectorAll('button').forEach(btn => {
+            btn.dataset.originalContent = btn.innerHTML;
+        });
+    </script>
+    <script src="/script.js"></script>
+</body>
+</html>

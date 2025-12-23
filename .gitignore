@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/editor
+.DS_Store
+*.swp
+*.swo
+
+# Env/secrets (adjust if you actually want typical.env tracked)
+.env
+*.env.local
