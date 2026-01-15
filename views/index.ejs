@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nir's Media Station 🎵</title>
+    <title>Nir's Media Station - boîte petite 🎵</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
         :root {
@@ -28,18 +28,30 @@
         }
 
         header {
+
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 0; 
             background: rgba(0,0,0,0.5);
             min-height: 80px;
             flex-shrink: 0;
+            gap: 6px;
+            padding: 0;
         }
-
+        .header-inner {
+          max-width: 800px;      /* must match .container max-width */
+          width: 100%;
+          padding: 20px 20px 10px 20px; /* match your desired header padding */
+          box-sizing: border-box;
+          margin: 0 auto;
+        }
         .title-section {
-            flex: 1;
+            width: 100%;
             min-width: 0;
+            margin-left: 0;
+            padding-left: 0;
         }
 
         h1 {
@@ -51,13 +63,68 @@
             text-overflow: ellipsis;
         }
 
+        /* Ensure clock and title share the exact left edge */
         #clock {
-            font-size: 3rem;
+            font-size: 6rem;
             font-weight: bold;
             color: yellow;
             white-space: nowrap;
-            flex-shrink: 0;
-            margin-left: 20px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .title-section h1 {
+            margin-top: 0;
+            margin-bottom: 4px;
+        }
+
+        #now-playing {
+            margin-top: 4px;
+            margin-bottom: 6px;
+            font-size: 1.05rem;
+            color: #ddd;
+        }
+
+        /* Marquee */
+
+/* Marquee (iOS Chrome/Safari safe) */
+i#np-track {
+  overflow: hidden;
+  white-space: nowrap;
+  font-weight: 600;
+  max-width: 100%;
+}
+
+#np-track .np-track-text {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* only animate when JS adds .marquee */
+#np-track.marquee .np-track-text {
+  will-change: transform;
+  transform: translate3d(100%, 0, 0);
+  -webkit-transform: translate3d(100%, 0, 0);
+  animation: marquee 12s linear infinite;
+  -webkit-animation: marquee 12s linear infinite;
+}
+
+@keyframes marquee {
+  from { transform: translate3d(100%, 0, 0); }
+  to   { transform: translate3d(-100%, 0, 0); }
+}
+
+@-webkit-keyframes marquee {
+  from { -webkit-transform: translate3d(100%, 0, 0); }
+  to   { -webkit-transform: translate3d(-100%, 0, 0); }
+}
+
+
+
+
+        #np-track,
+        #np-meta {
+            line-height: 1.25;
         }
 
         .container {
@@ -65,12 +132,14 @@
             max-width: 800px;
             width: 100%;
             margin: 0;
-            padding: 20px;
-            padding-right: 0;
+            padding: 6px 20px 20px 20px; /* reduced top padding */
+            padding-right: 20px;
             display: grid;
             gap: 16px;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            align-self: flex-start;
+            margin: 0 auto;
+            align-self: stretch; /* or remove align-self entirely */
+
         }
 
         .panel {
@@ -123,8 +192,8 @@
         }
 
         /* Volume gradient reds */
-        button#low { background: #ff4444; }
-        button#medium { background: #ff2222; }
+        button#low { background: #ffdddd; }
+        button#medium { background: #ffaaaa; }
         button#high { background: #ee0000; }
         button#superhigh { background: #cc0000; }
 
@@ -174,20 +243,15 @@
         }
 
         @media (max-width: 900px) {
-            header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            #clock { margin-left: 0; margin-top: 10px; }
             h1 { font-size: 1.8rem; }
             #clock { font-size: 2.6rem; }
         }
 
         @media (max-width: 480px) {
-            header { padding: 16px; }
+            header { padding: 16px 16px 10px 16px; }
             h1 { font-size: 1.6rem; }
             #clock { font-size: 2.3rem; }
-            .container { padding: 16px; padding-right: 0; }
+            .container { padding: 12px 16px 16px 16px; padding-right: 0; }
             button { font-size: 1.1rem; padding: 14px; }
             button.large { padding: 18px; }
             button svg { width: 28px; height: 28px; }
@@ -195,11 +259,22 @@
     </style>
 </head>
 <body>
+
     <header>
-        <div class="title-section">
-            <h1>Nir's Media Station 🎶</h1>
-        </div>
+      <div class="header-inner">
         <div id="clock">---- </div>
+
+        <div class="title-section">
+          <h1>Nir's Media Station - boîte petite 🎶</h1>
+          <div id="now-playing" style="font-size: 1.05rem; color: #ddd;">
+            <div id="np-track">
+              <span class="np-track-text"></span>
+            </div>
+
+            <div id="np-meta" style="opacity: 0.85;"></div>
+          </div>
+        </div>
+      </div>
     </header>
 
     <div class="container">
@@ -244,8 +319,22 @@
         <div class="panel source">
             <h2>🎼 Source & Tracks</h2>
             <button id="spotify" class="large">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><path d="M248 8C111.1 8 0 119.1 0 256s111.1 248 248 248 248-111.1 248-248S384.9 8 248 8Z" fill="#1DB954"/><path d="M406.6 231.1c-5.2 0-8.3-1.5-12.2-4.7-34.9-28.9-87.7-37.4-133.4-22.8-5.6 1.8-11.6.8-16.1-3.4-4.5-4.2-5.9-10.4-3.6-16 22.6-54 74.6-90.9 134.7-90.9 26.8 0 52.3 6.1 75.2 17.1 5.3 2.5 11.7 1.3 15.9-3.1 4.2-4.4 4.8-10.9 1.4-15.7-28.6-38.3-70.5-59.6-114.6-59.6-68.6 0-129.5 38.4-164.3 99.3-4.4 7.7-2.6 17.5 4.1 22.8 6.7 5.3 16.5 4.5 22.8-1.9 27.9-28.6 68.8-44.7 111.3-44.7 36.4 0 70.5 12.2 97.5 33.4 4.9 3.9 12.1 3.1 16.4-1.6 4.3-4.7 4.3-12 .2-16.7-19.2-30.6-51.1-48.2-86.3-48.2-55.8 0-105.4 31.1-130.7 79.2-3.8 7.2-1.6 16 5.4 20.9 7 4.9 16.1 4.4 22.3-.8 19.6-16.4 45.9-25.6 74-25.6 32.4 0 62.2 11.9 84.7 31.7 4.8 4.2 12.1 3.8 16.5-.6 4.4-4.4 4.5-11.7 .3-16.3-17.7-21.1-42.8-32.9-69.8-32.9-45.2 0-85.2 24.2-107.4 60.6-3.5 5.7-2.1 13.1 3.6 17.8 5.7 4.7 13.6 4.7 19.3 0 17.3-28.3 48.5-46.3 83.9-46.3 28.9 0 55.5 10.2 76.3 27.6 4.7 3.9 11.9 3.3 16.2-1.3 4.3-4.6 4.4-11.9 .3-16.6-16.3-19.7-40-30.5-65.9-30.5z"/></svg>
-                Play Spotify
+
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="800px" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <g stroke="none" stroke-width="1" fill="#fff" fill-rule="evenodd">
+        <g id="Logo" transform="translate(-720.000000, -96.000000)" fill-rule="nonzero">
+            <g id="spotify_line" transform="translate(720.000000, 96.000000)">
+                <path d="M12.5934901,23.257841 L12.5819402,23.2595131 L12.5108777,23.2950439 L12.4918791,23.2987469 L12.4918791,23.2987469 L12.4767152,23.2950439 L12.4056548,23.2595131 C12.3958229,23.2563662 12.3870493,23.2590235 12.3821421,23.2649074 L12.3780323,23.275831 L12.360941,23.7031097 L12.3658947,23.7234994 L12.3769048,23.7357139 L12.4804777,23.8096931 L12.4953491,23.8136134 L12.4953491,23.8136134 L12.5071152,23.8096931 L12.6106902,23.7357139 L12.6232938,23.7196733 L12.6232938,23.7196733 L12.6266527,23.7031097 L12.609561,23.275831 C12.6075724,23.2657013 12.6010112,23.2592993 12.5934901,23.257841 L12.5934901,23.257841 Z M12.8583906,23.1452862 L12.8445485,23.1473072 L12.6598443,23.2396597 L12.6498822,23.2499052 L12.6498822,23.2499052 L12.6471943,23.2611114 L12.6650943,23.6906389 L12.6699349,23.7034178 L12.6699349,23.7034178 L12.678386,23.7104931 L12.8793402,23.8032389 C12.8914285,23.8068999 12.9022333,23.8029875 12.9078286,23.7952264 L12.9118235,23.7811639 L12.8776777,23.1665331 C12.8752882,23.1545897 12.8674102,23.1470016 12.8583906,23.1452862 L12.8583906,23.1452862 Z M12.1430473,23.1473072 C12.1332178,23.1423925 12.1221763,23.1452606 12.1156365,23.1525954 L12.1099173,23.1665331 L12.0757714,23.7811639 C12.0751323,23.7926639 12.0828099,23.8018602 12.0926481,23.8045676 L12.108256,23.8032389 L12.3092106,23.7104931 L12.3186497,23.7024347 L12.3186497,23.7024347 L12.3225043,23.6906389 L12.340401,23.2611114 L12.337245,23.2485176 L12.337245,23.2485176 L12.3277531,23.2396597 L12.1430473,23.1473072 Z" id="MingCute" fill-rule="nonzero">
+</path>
+                <path d="M12,2 C17.5228,2 22,6.47715 22,12 C22,17.5228 17.5228,22 12,22 C6.47715,22 2,17.5228 2,12 C2,6.47715 6.47715,2 12,2 Z M12,4 C7.58172,4 4,7.58172 4,12 C4,16.4183 7.58172,20 12,20 C16.4183,20 20,16.4183 20,12 C20,7.58172 16.4183,4 12,4 Z M7.72828,14.1113 C9.14617,13.7852 10.6632,13.7887 11.9748,13.9922 C13.2512,14.1903 14.4891,14.6025 15.2517,15.2256 C15.6794,15.575 15.7429,16.205 15.3935,16.6327 C15.0709769,17.0275 14.5093627,17.1119757 14.0884713,16.8478234 L13.9864,16.7745 C13.63,16.4833 12.8083,16.1455 11.6681,15.9686 C10.563,15.7971 9.30621,15.8006 8.17648,16.0604 C7.63824,16.1842 7.10158,15.8482 6.97781,15.3099 C6.85405,14.7717 7.19004,14.235 7.72828,14.1113 Z M7.20759,11.3799 C10.4666,10.4712 14.2588,10.9854 16.5709,12.4052 C17.0415,12.6942 17.1888,13.31 16.8998,13.7807 C16.6108,14.2513 15.995,14.3986 15.5243,14.1095 C13.7412,13.0146 10.5334,12.5288 7.74479,13.3064 C7.2128,13.4548 6.66128,13.1438 6.51294,12.6118 C6.36459,12.0798 6.6756,11.5283 7.20759,11.3799 Z M6.73115,8.51383 C10.4902,7.4646 14.2265,8.00853 17.3965,9.37757 C17.9035,9.59654 18.137,10.1851 17.918,10.6921 C17.6991,11.1991 17.1105,11.4326 16.6035,11.2137 C13.7735,9.99147 10.5098,9.53558 7.26885,10.4402 C6.73689,10.5887 6.1853,10.2778 6.03682,9.74586 C5.88834,9.21391 6.1992,8.66231 6.73115,8.51383 Z" fill="#fff">
+</path>
+            </g>
+        </g>
+    </g>
+</svg>
+
+Play Spotify
             </button>
             <button id="techno" class="large">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
@@ -267,14 +356,12 @@
     <script>
         const infoElement = document.getElementById('info');
         let currentFeedbackButton = null;
-        const FEEDBACK_DURATION = 3000; // 3 seconds, matching your "Success" display time
+        const FEEDBACK_DURATION = 3000;
 
-        // Observe changes in #info to trigger visual feedback on the last clicked button
         const observer = new MutationObserver(() => {
             const text = infoElement.textContent.trim().toLowerCase();
 
             if (text === '' && currentFeedbackButton) {
-                // Status cleared → restore original button appearance
                 restoreButton(currentFeedbackButton);
                 currentFeedbackButton = null;
             } else if (text.includes('success') || text.includes('ok')) {
@@ -286,10 +373,8 @@
 
         observer.observe(infoElement, { childList: true, subtree: true, characterData: true });
 
-        // Track the last clicked button
         document.querySelectorAll('button').forEach(btn => {
             btn.addEventListener('click', function() {
-                // If there's ongoing feedback, clear it first
                 if (currentFeedbackButton && currentFeedbackButton !== this) {
                     restoreButton(currentFeedbackButton);
                 }
@@ -300,10 +385,8 @@
         function applyFeedback(type) {
             if (!currentFeedbackButton) return;
 
-            // Remove any previous feedback classes
             currentFeedbackButton.classList.remove('feedback-success', 'feedback-failure');
 
-            // Apply new feedback
             if (type === 'success') {
                 currentFeedbackButton.classList.add('feedback-success');
                 currentFeedbackButton.textContent = 'Success ✓';
@@ -312,14 +395,12 @@
                 currentFeedbackButton.textContent = 'Failure ✗';
             }
 
-            // Hide icon temporarily
             const svg = currentFeedbackButton.querySelector('svg');
             if (svg) svg.style.display = 'none';
 
-            // Auto-restore after duration (in case status doesn't clear exactly at 3s)
             setTimeout(() => {
-                if (currentFeedbackButton && 
-                    (currentFeedbackButton.classList.contains('feedback-success') || 
+                if (currentFeedbackButton &&
+                    (currentFeedbackButton.classList.contains('feedback-success') ||
                      currentFeedbackButton.classList.contains('feedback-failure'))) {
                     restoreButton(currentFeedbackButton);
                 }
@@ -328,16 +409,41 @@
 
         function restoreButton(btn) {
             btn.classList.remove('feedback-success', 'feedback-failure');
-            btn.innerHTML = btn.dataset.originalContent || btn.innerHTML; // restore original HTML
+            btn.innerHTML = btn.dataset.originalContent || btn.innerHTML;
             const svg = btn.querySelector('svg');
             if (svg) svg.style.display = '';
         }
 
-        // Save original button content on load
         document.querySelectorAll('button').forEach(btn => {
             btn.dataset.originalContent = btn.innerHTML;
         });
     </script>
+
+    <script>
+        // Bridge: if existing code writes into #np-track, move it into .np-track-text automatically
+        (function () {
+            const trackDiv = document.getElementById('np-track');
+            const span = trackDiv && trackDiv.querySelector('.np-track-text');
+            if (!trackDiv || !span) return;
+
+            const sync = () => {
+                if (span.textContent && span.textContent.trim()) return;
+
+                const directText = Array.from(trackDiv.childNodes)
+                    .filter(n => n.nodeType === Node.TEXT_NODE)
+                    .map(n => n.textContent)
+                    .join('')
+                    .trim();
+
+                if (directText) span.textContent = directText;
+            };
+
+            sync();
+            new MutationObserver(sync).observe(trackDiv, { childList: true, characterData: true, subtree: true });
+        })();
+    </script>
+
     <script src="/script.js"></script>
 </body>
 </html>
+

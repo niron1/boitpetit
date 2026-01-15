@@ -1,0 +1,23 @@
+# Environment (applies to all jobs below)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# Spotify cache cleanup -> send stdout/stderr to journald/syslog (rotated automatically)
+@daily /usr/local/bin/spotify_cache_cleanup.sh 2>&1 | /usr/bin/logger -t spotify_cleanup
+
+
+ 
+# m h  dom mon dow   command
+10,30,50 9-13,16-22 * * 0-4 /home/giz/media_station/amixer_enhanced.sh  sset Speaker 25\% >> /tmp/cron.log 2>&1
+0,20,40 9-13,16-22 * * 0-4 /home/giz/media_station/amixer_enhanced.sh  sset Speaker 45\% >> /tmp/cron.log 2>&1 
+
+10,30,50 9-13,16-22 * * 5-6 /home/giz/media_station/amixer_enhanced.sh  sset Speaker 5\% >> /tmp/cron.log 2>&1
+0,20,40 9-13,16-22 * * 5-6 /home/giz/media_station/amixer_enhanced.sh  sset Speaker 10\% >> /tmp/cron.log 2>&1 
+
+55 22 * * * /home/giz/media_station/amixer_enhanced.sh  sset Speaker 0\% >> /tmp/cron.log 2>&1
+55 13 * * * /home/giz/media_station/amixer_enhanced.sh  sset Speaker 0\% >> /tmp/cron.log 2>&1
+
+0 0 * * * /home/giz/media_station/midnight_mute_guard.sh  >> /tmp/cron.log 2>&1
+
+
