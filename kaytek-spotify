@@ -1,0 +1,464 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_NAME="kaytek-spotify"
+CFG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/${APP_NAME}"
+CFG_FILE="${CFG_DIR}/config.json"
+
+AUTH_BASE="https://accounts.spotify.com"
+API_BASE="https://api.spotify.com/v1"
+
+DEFAULT_REDIRECT_URI="http://127.0.0.1:8765/callback"
+DEFAULT_SCOPES="user-read-playback-state user-modify-playback-state"
+
+need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2; exit 1; }; }
+
+ensure_cfg() {
+  mkdir -p "$CFG_DIR"
+  if [[ ! -f "$CFG_FILE" ]]; then
+    jq -n --arg redirect_uri "$DEFAULT_REDIRECT_URI" --arg scopes "$DEFAULT_SCOPES" \
+      '{client_id:"", redirect_uri:$redirect_uri, scopes:$scopes, refresh_token:"", access_token:"", expires_at:0}' \
+      > "$CFG_FILE"
+    chmod 600 "$CFG_FILE" || true
+  fi
+}
+
+cfg_get() { jq -r "$1" "$CFG_FILE"; }
+cfg_set() {
+  local jq_expr="$1"
+  local tmp="${CFG_FILE}.tmp"
+  jq "$jq_expr" "$CFG_FILE" > "$tmp"
+  mv "$tmp" "$CFG_FILE"
+  chmod 600 "$CFG_FILE" || true
+}
+
+urlencode() {
+  # Minimal URL encoding for query params (UTF-8 safe for common inputs).
+  python3 - <<'PY' "$1"
+import sys, urllib.parse
+print(urllib.parse.quote(sys.argv[1], safe=""))
+PY
+}
+
+b64url() {
+  # stdin -> base64url (no padding)
+  python3 - <<'PY'
+import sys, base64
+data = sys.stdin.buffer.read()
+enc = base64.urlsafe_b64encode(data).decode('ascii').rstrip("=")
+print(enc)
+PY
+}
+
+sha256_b64url() {
+  python3 - <<'PY'
+import sys, hashlib, base64
+data = sys.stdin.buffer.read()
+digest = hashlib.sha256(data).digest()
+enc = base64.urlsafe_b64encode(digest).decode('ascii').rstrip("=")
+print(enc)
+PY
+}
+
+rand_b64url() {
+  # Generate a random verifier-like string
+  python3 - <<'PY'
+import os, base64
+raw = os.urandom(64)
+print(base64.urlsafe_b64encode(raw).decode('ascii').rstrip("="))
+PY
+}
+
+start_callback_server_and_get_code() {
+  # Starts a tiny HTTP server at 127.0.0.1:8765 that captures ?code=... and prints it, then exits.
+  # Also validates state.
+  local expected_state="$1"
+  python3 - <<'PY' "$expected_state"
+import http.server, socketserver, urllib.parse, sys
+
+expected_state = sys.argv[1]
+code_holder = {"code": None}
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):  # quiet
+        pass
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(parsed.query)
+        if parsed.path != "/callback":
+            self.send_response(404); self.end_headers()
+            self.wfile.write(b"Not Found")
+            return
+        state = (qs.get("state") or [""])[0]
+        code  = (qs.get("code")  or [""])[0]
+        if not code or state != expected_state:
+            self.send_response(400); self.end_headers()
+            self.wfile.write(b"Invalid callback (missing code or state mismatch). You can close this tab.")
+            return
+        self.send_response(200); self.end_headers()
+        self.wfile.write(b"Login captured. You can close this tab and return to the terminal.")
+        code_holder["code"] = code
+
+PORT = 8765
+with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+    # Handle requests until we captured a code, then exit.
+    while code_holder["code"] is None:
+        httpd.handle_request()
+
+print(code_holder["code"])
+PY
+}
+
+token_exchange_authorization_code() {
+  local client_id="$1"
+  local code="$2"
+  local redirect_uri="$3"
+  local code_verifier="$4"
+
+  curl -sS -X POST "${AUTH_BASE}/api/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data-urlencode "grant_type=authorization_code" \
+    --data-urlencode "client_id=${client_id}" \
+    --data-urlencode "code=${code}" \
+    --data-urlencode "redirect_uri=${redirect_uri}" \
+    --data-urlencode "code_verifier=${code_verifier}"
+}
+
+token_refresh() {
+  local client_id="$1"
+  local refresh_token="$2"
+
+  curl -sS -X POST "${AUTH_BASE}/api/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data-urlencode "grant_type=refresh_token" \
+    --data-urlencode "client_id=${client_id}" \
+    --data-urlencode "refresh_token=${refresh_token}"
+}
+
+now_epoch() { date +%s; }
+
+ensure_access_token() {
+  local client_id redirect_uri scopes refresh_token access_token expires_at
+  client_id="$(cfg_get '.client_id')"
+  refresh_token="$(cfg_get '.refresh_token')"
+  access_token="$(cfg_get '.access_token')"
+  expires_at="$(cfg_get '.expires_at')"
+
+  if [[ -z "$client_id" || "$client_id" == "null" ]]; then
+    echo "Missing client_id. Run: $0 set-client-id <your_client_id>" >&2
+    exit 1
+  fi
+
+  local now; now="$(now_epoch)"
+  # Refresh if expired or about to expire in 30s
+  if [[ -z "$access_token" || "$access_token" == "null" || "$expires_at" -le $((now+30)) ]]; then
+    if [[ -z "$refresh_token" || "$refresh_token" == "null" ]]; then
+      echo "Not logged in (no refresh_token). Run: $0 login" >&2
+      exit 1
+    fi
+    local resp access new_expires maybe_new_refresh
+    resp="$(token_refresh "$client_id" "$refresh_token")"
+    if [[ "$(echo "$resp" | jq -r '.error // empty')" != "" ]]; then
+      echo "Token refresh failed: $(echo "$resp" | jq -c '.')" >&2
+      echo "If you see invalid_grant, you must re-run: $0 login" >&2
+      exit 1
+    fi
+    access="$(echo "$resp" | jq -r '.access_token')"
+    new_expires="$(( now + $(echo "$resp" | jq -r '.expires_in') ))"
+    maybe_new_refresh="$(echo "$resp" | jq -r '.refresh_token // empty')"
+
+    cfg_set --arg at "$access" --argjson ea "$new_expires" \
+      '.access_token=$at | .expires_at=$ea'
+
+    if [[ -n "$maybe_new_refresh" && "$maybe_new_refresh" != "null" ]]; then
+      cfg_set --arg rt "$maybe_new_refresh" '.refresh_token=$rt'
+    fi
+  fi
+}
+
+api() {
+  local method="$1"; shift
+  local path="$1"; shift
+  local data="${1:-}"
+
+  ensure_access_token
+  local token; token="$(cfg_get '.access_token')"
+
+  if [[ -n "$data" ]]; then
+    curl -sS -X "$method" "${API_BASE}${path}" \
+      -H "Authorization: Bearer ${token}" \
+      -H "Content-Type: application/json" \
+      --data "$data"
+  else
+    curl -sS -X "$method" "${API_BASE}${path}" \
+      -H "Authorization: Bearer ${token}"
+  fi
+}
+
+cmd_help() {
+  cat <<'TXT'
+Usage: kaytek-spotify <command> [args]
+
+Commands:
+  set-client-id <client_id>         Store Spotify Developer App client_id (required).
+  set-redirect-uri <uri>            Override redirect URI (default: http://127.0.0.1:8765/callback)
+  set-scopes "<scopes>"             Override scopes (default: user-read-playback-state user-modify-playback-state)
+
+  login                             Interactive browser login (PKCE). Stores refresh_token under ~/.config/kaytek-spotify/
+  refresh-token                     Force a refresh (normally done automatically on demand)
+
+  devices                           List available Spotify Connect devices (name/id/type/active/restricted)
+  use-device <device>               Transfer playback to device (match by id or case-insensitive name substring)
+  status                            Show current playback state (includes active device when available)
+
+  token-info                        Show token expiry status (no secrets printed)
+  config-show                       Print current config (redacts tokens)
+
+Notes:
+  - "Transfer playback" requires Spotify Premium.
+  - If devices list is empty, ensure Spotify is running on the target device and logged in.
+TXT
+}
+
+cmd_set_client_id() {
+  local cid="${1:-}"
+  [[ -n "$cid" ]] || { echo "set-client-id requires <client_id>" >&2; exit 1; }
+  cfg_set --arg cid "$cid" '.client_id=$cid'
+  echo "OK: client_id stored in ${CFG_FILE}"
+}
+
+cmd_set_redirect_uri() {
+  local uri="${1:-}"
+  [[ -n "$uri" ]] || { echo "set-redirect-uri requires <uri>" >&2; exit 1; }
+  cfg_set --arg uri "$uri" '.redirect_uri=$uri'
+  echo "OK: redirect_uri stored in ${CFG_FILE}"
+}
+
+cmd_set_scopes() {
+  local scopes="${1:-}"
+  [[ -n "$scopes" ]] || { echo 'set-scopes requires "<scopes>"' >&2; exit 1; }
+  cfg_set --arg scopes "$scopes" '.scopes=$scopes'
+  echo "OK: scopes stored in ${CFG_FILE}"
+}
+
+cmd_login() {
+  local client_id redirect_uri scopes
+  client_id="$(cfg_get '.client_id')"
+  redirect_uri="$(cfg_get '.redirect_uri')"
+  scopes="$(cfg_get '.scopes')"
+
+  if [[ -z "$client_id" || "$client_id" == "null" ]]; then
+    echo "Missing client_id. Run: $0 set-client-id <your_client_id>" >&2
+    exit 1
+  fi
+
+  need_cmd xdg-open
+
+  local verifier challenge state
+  verifier="$(rand_b64url)"
+  challenge="$(printf '%s' "$verifier" | sha256_b64url)"
+  state="$(rand_b64url)"
+
+  local enc_redirect enc_scopes
+  enc_redirect="$(urlencode "$redirect_uri")"
+  enc_scopes="$(urlencode "$scopes")"
+
+  local auth_url="${AUTH_BASE}/authorize?client_id=$(urlencode "$client_id")&response_type=code&redirect_uri=${enc_redirect}&scope=${enc_scopes}&code_challenge_method=S256&code_challenge=$(urlencode "$challenge")&state=$(urlencode "$state")"
+
+  echo "Opening browser for Spotify login..."
+  echo "If your browser does not open, copy/paste this URL:"
+  echo "$auth_url"
+  xdg-open "$auth_url" >/dev/null 2>&1 || true
+
+  echo "Waiting for callback on ${redirect_uri} ..."
+  local code
+  code="$(start_callback_server_and_get_code "$state")"
+
+  echo "Exchanging authorization code for tokens..."
+  local resp err access refresh expires_in expires_at
+  resp="$(token_exchange_authorization_code "$client_id" "$code" "$redirect_uri" "$verifier")"
+  err="$(echo "$resp" | jq -r '.error // empty')"
+  if [[ -n "$err" ]]; then
+    echo "Login failed: $(echo "$resp" | jq -c '.')" >&2
+    exit 1
+  fi
+
+  access="$(echo "$resp" | jq -r '.access_token')"
+  refresh="$(echo "$resp" | jq -r '.refresh_token')"
+  expires_in="$(echo "$resp" | jq -r '.expires_in')"
+  expires_at="$(( $(now_epoch) + expires_in ))"
+
+  cfg_set --arg at "$access" --arg rt "$refresh" --argjson ea "$expires_at" \
+    '.access_token=$at | .refresh_token=$rt | .expires_at=$ea'
+
+  echo "OK: login stored in ${CFG_FILE}"
+}
+
+cmd_refresh_token() {
+  ensure_access_token
+  echo "OK: access token is valid (refreshed if needed)."
+}
+
+cmd_devices() {
+  # Get Available Devices
+  local resp
+  resp="$(api GET "/me/player/devices")"
+  echo "$resp" | jq -r '
+    if (.devices | length) == 0 then
+      "No available devices returned."
+    else
+      (.devices[] | [
+        (.name // ""),
+        (.id // ""),
+        (.type // ""),
+        ("active=" + ((.is_active//false)|tostring)),
+        ("restricted=" + ((.is_restricted//false)|tostring)),
+        ("volume=" + ((.volume_percent//null)|tostring))
+      ] | @tsv)
+    end
+  '
+}
+
+pick_device_id() {
+  local query="$1"
+  local resp devices matches
+  resp="$(api GET "/me/player/devices")"
+  devices="$(echo "$resp" | jq -c '.devices')"
+  if [[ "$(echo "$devices" | jq 'length')" -eq 0 ]]; then
+    echo ""  # none
+    return 0
+  fi
+
+  # If query looks like an exact id, prefer exact match
+  local exact
+  exact="$(echo "$devices" | jq -r --arg q "$query" '.[] | select(.id == $q) | .id' | head -n1 || true)"
+  if [[ -n "$exact" ]]; then
+    echo "$exact"
+    return 0
+  fi
+
+  # Case-insensitive substring match on name
+  matches="$(echo "$devices" | jq -r --arg q "$query" '
+    .[] | select((.name // "" | ascii_downcase) | contains($q|ascii_downcase)) | .id
+  ')"
+
+  local count
+  count="$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [[ "$count" -eq 1 ]]; then
+    echo "$matches" | head -n1
+    return 0
+  fi
+
+  if [[ "$count" -gt 1 ]]; then
+    echo "__AMBIGUOUS__"
+    echo "$devices" | jq -r --arg q "$query" '
+      .[] | select((.name // "" | ascii_downcase) | contains($q|ascii_downcase)) |
+      (.name + "\t" + .id + "\t" + (.type // ""))
+    ' >&2
+    return 0
+  fi
+
+  echo ""  # none
+}
+
+cmd_use_device() {
+  local query="${1:-}"
+  [[ -n "$query" ]] || { echo "use-device requires <device>" >&2; exit 1; }
+
+  local picked
+  picked="$(pick_device_id "$query" || true)"
+  if [[ "$picked" == "__AMBIGUOUS__" ]]; then
+    echo "Ambiguous device match for: $query" >&2
+    echo "Refine your query or use the exact device id." >&2
+    exit 2
+  fi
+  if [[ -z "$picked" ]]; then
+    echo "No device matched: $query" >&2
+    echo "Run: $0 devices" >&2
+    exit 1
+  fi
+
+  local body resp
+  body="$(jq -n --arg id "$picked" '{device_ids:[$id], play:true}')"
+  resp="$(api PUT "/me/player" "$body")"
+
+  # Transfer Playback returns 204 No Content on success; curl prints nothing. Provide confirmation.
+  if [[ -z "$resp" ]]; then
+    echo "OK: transferred playback to device_id=$picked"
+  else
+    # Some errors return JSON
+    if [[ "$(echo "$resp" | jq -r '.error.status // empty')" != "" ]]; then
+      echo "Transfer failed: $(echo "$resp" | jq -c '.error')" >&2
+      exit 1
+    fi
+    echo "Response: $resp"
+  fi
+}
+
+cmd_status() {
+  local resp
+  resp="$(api GET "/me/player")"
+  if [[ -z "$resp" ]]; then
+    echo "No active playback state returned (likely nothing playing or no active device)."
+    exit 0
+  fi
+  echo "$resp" | jq -r '
+    {
+      is_playing,
+      progress_ms,
+      device: ( .device | {name,id,type,is_active,is_restricted,volume_percent} ),
+      item: ( .item | if . then {name, type, uri, artists:(.artists//[]|map(.name))} else null end )
+    }'
+}
+
+cmd_token_info() {
+  ensure_cfg
+  local expires_at now left
+  expires_at="$(cfg_get '.expires_at')"
+  now="$(now_epoch)"
+  left="$((expires_at - now))"
+  if [[ "$left" -lt 0 ]]; then left=0; fi
+  echo "expires_at: $expires_at"
+  echo "seconds_remaining: $left"
+  echo "has_refresh_token: $([[ -n "$(cfg_get '.refresh_token')" && "$(cfg_get '.refresh_token')" != "null" ]] && echo true || echo false)"
+}
+
+cmd_config_show() {
+  jq '
+    .refresh_token = (if (.refresh_token|length) > 0 then "***redacted***" else "" end) |
+    .access_token  = (if (.access_token|length)  > 0 then "***redacted***" else "" end)
+  ' "$CFG_FILE"
+}
+
+main() {
+  ensure_cfg
+  need_cmd curl
+  need_cmd jq
+  need_cmd python3
+
+  local cmd="${1:-help}"; shift || true
+
+  case "$cmd" in
+    help|-h|--help) cmd_help ;;
+    set-client-id) cmd_set_client_id "${1:-}" ;;
+    set-redirect-uri) cmd_set_redirect_uri "${1:-}" ;;
+    set-scopes) cmd_set_scopes "${1:-}" ;;
+
+    login) cmd_login ;;
+    refresh-token) cmd_refresh_token ;;
+
+    devices) cmd_devices ;;
+    use-device) cmd_use_device "${1:-}" ;;
+    status) cmd_status ;;
+
+    token-info) cmd_token_info ;;
+    config-show) cmd_config_show ;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      cmd_help >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

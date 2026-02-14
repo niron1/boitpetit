@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Tunable offsets from the bottom-right corner of the Spotify window.
+DX="${DX:-140}"   # pixels left from right edge
+DY="${DY:-70}"    # pixels up from bottom edge
+
+# Get Spotify window id from wmctrl (hex like 0x00400003)
+WID_HEX="$(wmctrl -lx | awk 'tolower($0) ~ /spotify\.spotify/ {print $1; exit}')"
+if [[ -z "${WID_HEX:-}" ]]; then
+  echo "Could not find Spotify window via wmctrl -lx" >&2
+  exit 1
+fi
+
+# xdotool accepts decimal window id; convert hex -> decimal
+WID_DEC="$((WID_HEX))"
+
+# Activate window
+xdotool windowactivate "$WID_DEC"
+sleep 0.15
+
+# Get window geometry via xdotool --shell output
+eval "$(xdotool getwindowgeometry --shell "$WID_DEC")"  # sets X,Y,WIDTH,HEIGHT,SCREEN
+
+CLICK_X="$(( X + WIDTH - DX ))"
+CLICK_Y="$(( Y + HEIGHT - DY ))"
+
+xdotool mousemove --sync "$CLICK_X" "$CLICK_Y" click 1
+
+echo "Spotify window: ${WID_HEX} (dec ${WID_DEC})"
+echo "Clicked at: ${CLICK_X},${CLICK_Y}  (DX=${DX}, DY=${DY})"
